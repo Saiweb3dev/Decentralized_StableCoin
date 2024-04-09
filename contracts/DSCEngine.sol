@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 import {DecentralizedStableCoin} from "./DecentralizedStableCoin.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 contract DSCEngine is ReentrancyGuard {
@@ -71,7 +71,7 @@ contract DSCEngine is ReentrancyGuard {
      function depositCollateral(address tokenCollateralAddress,uint amountCollateral) external moreThanZero(amountCollateral) isAllowedToken(tokenCollateralAddress) nonReentrant {
        s_collateralDeposited[msg.sender][tokenCollateralAddress] += amountCollateral;
        emit CollateralDeposited(msg.sender,tokenCollateralAddress,amountCollateral);
-       bool success =IERC20(tokenCollateralAddress).safeTransferFrom(msg.sender,address(this),amountCollateral);
+       bool success =IERC20(tokenCollateralAddress).transferFrom(msg.sender,address(this),amountCollateral);
        if(!success){
          revert DSCEngine__TransferFailed();
        }
@@ -103,14 +103,14 @@ contract DSCEngine is ReentrancyGuard {
      //Private and Internal Function
 
     function _getAccountInformation(address user) private view returns(uint totalDscMinted,uint collateralValueInUsd){
-      totalDscMinted = s_DSCMinted(user);
+      totalDscMinted = s_DSCMinted[user];
       collateralValueInUsd = getAccountCollateralValue(user);
     }
 
      function _healthFactor(address user) private view returns(uint){
       (uint totalDscMinted,uint collateralValueInUsd) = _getAccountInformation(user);
        uint collateralAdjustedForThreshold = (collateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
-       return (collateralAdjustedForThreshold * PRECISION) / totalDSCMinted;
+       return (collateralAdjustedForThreshold * PRECISION) / totalDscMinted;
      }
 
      function _revertIfHealthFactorIsBroken(address user) internal view {
@@ -132,7 +132,7 @@ contract DSCEngine is ReentrancyGuard {
 
      function getUsdValue(address token,uint amount) public view returns(uint){
       AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
-      uint price = priceFeed.latestRoundData()[1];
+      (,int price,,,) = priceFeed.latestRoundData();
       return ((uint(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
      }
 }
